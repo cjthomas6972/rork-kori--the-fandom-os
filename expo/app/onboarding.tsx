@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { StyleSheet, View, Text, Pressable, ScrollView, Dimensions, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -9,12 +9,324 @@ import { OnboardingState } from '@/types/identity';
 import { UNIVERSES, CANON_ANCHORS } from '@/constants/universes';
 import { ARCHETYPES, INTENTS, IntentType } from '@/constants/archetypes';
 import { MistBackground, CrescentButton, GlassChip, SakuraPetals } from '@/components/lunar';
-import KORI_COLORS from '@/constants/colors';
+import { useTheme, ThemeTokens } from '@/contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
+/** Theme-aware styles: rebuilt when the mode (light/dark) changes. */
+const makeStyles = (colors: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    safeArea: {
+      flex: 1,
+    },
+    header: {
+      padding: 20,
+      gap: 16,
+    },
+    brandRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    sigilMark: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.accentGold,
+      shadowColor: colors.accentGold,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+    },
+    logo: {
+      fontSize: 28,
+      fontWeight: '700' as const,
+      color: colors.text0,
+      letterSpacing: 4,
+    },
+    progressBar: {
+      height: 4,
+      backgroundColor: colors.bg3,
+      borderRadius: 2,
+      overflow: 'hidden',
+    },
+    progressFill: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      bottom: 0,
+      backgroundColor: colors.accentPrimary,
+      borderRadius: 2,
+    },
+    progressTrack: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingHorizontal: 2,
+      height: 4,
+      alignItems: 'center',
+    },
+    progressDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.bg2,
+      borderWidth: 2,
+      borderColor: colors.bg3,
+    },
+    progressDotActive: {
+      backgroundColor: colors.accentPrimary,
+      borderColor: colors.accentPrimary,
+    },
+    stepContainer: {
+      flex: 1,
+      paddingHorizontal: 20,
+    },
+    stepHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 8,
+    },
+    moonHalo: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.glowMoon,
+    },
+    stepTitle: {
+      fontSize: 24,
+      fontWeight: '700' as const,
+      color: colors.text0,
+    },
+    stepSubtitle: {
+      fontSize: 15,
+      color: colors.text1,
+      marginBottom: 20,
+      marginLeft: 44,
+    },
+    scrollContent: {
+      flex: 1,
+    },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+      paddingBottom: 20,
+    },
+    universeCard: {
+      width: (width - 52) / 2,
+      aspectRatio: 1.2,
+      backgroundColor: colors.bg2,
+      borderRadius: 14,
+      padding: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.glassBorder,
+    },
+    universeCardSelected: {
+      borderColor: 'transparent',
+    },
+    universeIcon: {
+      fontSize: 36,
+    },
+    universeName: {
+      fontSize: 14,
+      fontWeight: '600' as const,
+      color: colors.text0,
+      textAlign: 'center',
+    },
+    universeBorder: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderWidth: 2,
+      borderRadius: 14,
+    },
+    universeEmberTop: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 2,
+      borderTopLeftRadius: 14,
+      borderTopRightRadius: 14,
+    },
+    canonSection: {
+      marginBottom: 24,
+    },
+    canonHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 12,
+    },
+    canonIcon: {
+      fontSize: 22,
+    },
+    canonTitle: {
+      fontSize: 17,
+      fontWeight: '600' as const,
+      color: colors.text0,
+    },
+    canonGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    archetypeList: {
+      gap: 12,
+      paddingBottom: 20,
+    },
+    archetypeCard: {
+      backgroundColor: colors.bg2,
+      borderRadius: 14,
+      padding: 18,
+      gap: 10,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.glassBorder,
+    },
+    archetypeCardSelected: {
+      borderColor: 'transparent',
+    },
+    archetypeHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    archetypeIcon: {
+      fontSize: 28,
+    },
+    archetypeName: {
+      fontSize: 18,
+      fontWeight: '700' as const,
+      color: colors.text0,
+    },
+    archetypeDesc: {
+      fontSize: 14,
+      color: colors.text1,
+      lineHeight: 20,
+    },
+    archetypeBorder: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderWidth: 2,
+      borderRadius: 14,
+    },
+    archetypeEmberTop: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 2,
+      borderTopLeftRadius: 14,
+      borderTopRightRadius: 14,
+    },
+    intentList: {
+      gap: 12,
+    },
+    intentCard: {
+      backgroundColor: colors.bg2,
+      borderRadius: 14,
+      padding: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.glassBorder,
+    },
+    intentCardSelected: {
+      borderColor: 'transparent',
+    },
+    intentIcon: {
+      fontSize: 28,
+    },
+    intentLabel: {
+      fontSize: 17,
+      fontWeight: '600' as const,
+      color: colors.text0,
+    },
+    intentBorder: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderWidth: 2,
+      borderRadius: 14,
+    },
+    visibilityList: {
+      gap: 12,
+    },
+    visibilityCard: {
+      backgroundColor: colors.bg2,
+      borderRadius: 14,
+      padding: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+      borderWidth: 1,
+      borderColor: colors.glassBorder,
+    },
+    visibilityCardSelected: {
+      backgroundColor: colors.bg3,
+      borderColor: colors.accentGold + '40',
+    },
+    visibilityIcon: {
+      fontSize: 28,
+    },
+    visibilityContent: {
+      flex: 1,
+      gap: 4,
+    },
+    visibilityLabel: {
+      fontSize: 17,
+      fontWeight: '600' as const,
+      color: colors.text0,
+    },
+    visibilityDesc: {
+      fontSize: 13,
+      color: colors.text1,
+    },
+    visibilityBorder: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderWidth: 2,
+      borderColor: colors.accentGold,
+      borderRadius: 14,
+    },
+    footer: {
+      flexDirection: 'row',
+      padding: 20,
+      gap: 12,
+    },
+    backButton: {
+      minWidth: 80,
+    },
+    nextButton: {
+      flex: 1,
+    },
+  });
+
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { completeOnboarding } = useIdentity();
   
   const [step, setStep] = useState(0);
@@ -336,6 +648,8 @@ function UniverseSelectCard({ universe, isSelected, onPress }: {
   isSelected: boolean; 
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = useCallback(() => {
@@ -380,6 +694,8 @@ function ArchetypeCard({ archetype, isSelected, onPress }: {
   isSelected: boolean;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = useCallback(() => {
@@ -429,6 +745,8 @@ function IntentCard({ intent, isSelected, onPress }: {
   isSelected: boolean;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = useCallback(() => {
@@ -472,6 +790,8 @@ function VisibilityCard({ visibility, isSelected, onPress }: {
   isSelected: boolean;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = useCallback(() => {
@@ -492,7 +812,7 @@ function VisibilityCard({ visibility, isSelected, onPress }: {
       >
         <Text style={styles.visibilityIcon}>{visibility.icon}</Text>
         <View style={styles.visibilityContent}>
-          <Text style={[styles.visibilityLabel, isSelected && { color: KORI_COLORS.accent.gold }]}>
+          <Text style={[styles.visibilityLabel, isSelected && { color: colors.accentGold }]}>
             {visibility.label}
           </Text>
           <Text style={styles.visibilityDesc}>{visibility.desc}</Text>
@@ -502,311 +822,3 @@ function VisibilityCard({ visibility, isSelected, onPress }: {
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  header: {
-    padding: 20,
-    gap: 16,
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  sigilMark: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: KORI_COLORS.lunar.moonGold,
-    shadowColor: KORI_COLORS.lunar.moonGold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-  },
-  logo: {
-    fontSize: 28,
-    fontWeight: '700' as const,
-    color: KORI_COLORS.text.primary,
-    letterSpacing: 4,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: KORI_COLORS.bg.elevated,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    backgroundColor: KORI_COLORS.accent.primary,
-    borderRadius: 2,
-  },
-  progressTrack: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 2,
-    height: 4,
-    alignItems: 'center',
-  },
-  progressDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: KORI_COLORS.bg.card,
-    borderWidth: 2,
-    borderColor: KORI_COLORS.bg.elevated,
-  },
-  progressDotActive: {
-    backgroundColor: KORI_COLORS.accent.primary,
-    borderColor: KORI_COLORS.accent.primary,
-  },
-  stepContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  stepHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  moonHalo: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: KORI_COLORS.lunar.moonGold + '15',
-  },
-  stepTitle: {
-    fontSize: 24,
-    fontWeight: '700' as const,
-    color: KORI_COLORS.text.primary,
-  },
-  stepSubtitle: {
-    fontSize: 15,
-    color: KORI_COLORS.text.secondary,
-    marginBottom: 20,
-    marginLeft: 44,
-  },
-  scrollContent: {
-    flex: 1,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    paddingBottom: 20,
-  },
-  universeCard: {
-    width: (width - 52) / 2,
-    aspectRatio: 1.2,
-    backgroundColor: KORI_COLORS.bg.card,
-    borderRadius: 14,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: KORI_COLORS.glass.border,
-  },
-  universeCardSelected: {
-    borderColor: 'transparent',
-  },
-  universeIcon: {
-    fontSize: 36,
-  },
-  universeName: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: KORI_COLORS.text.primary,
-    textAlign: 'center',
-  },
-  universeBorder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderWidth: 2,
-    borderRadius: 14,
-  },
-  universeEmberTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-  },
-  canonSection: {
-    marginBottom: 24,
-  },
-  canonHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  canonIcon: {
-    fontSize: 22,
-  },
-  canonTitle: {
-    fontSize: 17,
-    fontWeight: '600' as const,
-    color: KORI_COLORS.text.primary,
-  },
-  canonGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  archetypeList: {
-    gap: 12,
-    paddingBottom: 20,
-  },
-  archetypeCard: {
-    backgroundColor: KORI_COLORS.bg.card,
-    borderRadius: 14,
-    padding: 18,
-    gap: 10,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: KORI_COLORS.glass.border,
-  },
-  archetypeCardSelected: {
-    borderColor: 'transparent',
-  },
-  archetypeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  archetypeIcon: {
-    fontSize: 28,
-  },
-  archetypeName: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    color: KORI_COLORS.text.primary,
-  },
-  archetypeDesc: {
-    fontSize: 14,
-    color: KORI_COLORS.text.secondary,
-    lineHeight: 20,
-  },
-  archetypeBorder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderWidth: 2,
-    borderRadius: 14,
-  },
-  archetypeEmberTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-  },
-  intentList: {
-    gap: 12,
-  },
-  intentCard: {
-    backgroundColor: KORI_COLORS.bg.card,
-    borderRadius: 14,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: KORI_COLORS.glass.border,
-  },
-  intentCardSelected: {
-    borderColor: 'transparent',
-  },
-  intentIcon: {
-    fontSize: 28,
-  },
-  intentLabel: {
-    fontSize: 17,
-    fontWeight: '600' as const,
-    color: KORI_COLORS.text.primary,
-  },
-  intentBorder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderWidth: 2,
-    borderRadius: 14,
-  },
-  visibilityList: {
-    gap: 12,
-  },
-  visibilityCard: {
-    backgroundColor: KORI_COLORS.bg.card,
-    borderRadius: 14,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    borderWidth: 1,
-    borderColor: KORI_COLORS.glass.border,
-  },
-  visibilityCardSelected: {
-    backgroundColor: KORI_COLORS.bg.elevated,
-    borderColor: KORI_COLORS.lunar.moonGold + '40',
-  },
-  visibilityIcon: {
-    fontSize: 28,
-  },
-  visibilityContent: {
-    flex: 1,
-    gap: 4,
-  },
-  visibilityLabel: {
-    fontSize: 17,
-    fontWeight: '600' as const,
-    color: KORI_COLORS.text.primary,
-  },
-  visibilityDesc: {
-    fontSize: 13,
-    color: KORI_COLORS.text.secondary,
-  },
-  visibilityBorder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderWidth: 2,
-    borderColor: KORI_COLORS.accent.gold,
-    borderRadius: 14,
-  },
-  footer: {
-    flexDirection: 'row',
-    padding: 20,
-    gap: 12,
-  },
-  backButton: {
-    minWidth: 80,
-  },
-  nextButton: {
-    flex: 1,
-  },
-});
